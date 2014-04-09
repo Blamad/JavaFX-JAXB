@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<productCatalog>
+    <product>
+        <name>TDK DVD-R 1-8x 4.7GB (10xDVD Cake BOX)</name>
+        <price currency="PLN">15</price>
+    </product>
+    <product>
+        <name>Verbatim DVD-R DualLayer 8.5GB</name>
+        <price currency="PLN">12</price>
+    </product>
+    <product>
+        <name>Verbatim (100xCD) Cake BOX</name>
+        <price currency="PLN">99</price>
+    </product>
+    <product>
+        <name>Kingston CompactFlash 4GB</name>
+        <price currency="EUR">7</price>
+    </product>
+</productCatalog>

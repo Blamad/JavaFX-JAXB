@@ -1,5 +1,6 @@
 package controller;
 
+import java.awt.print.Book;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -21,14 +22,21 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 
+import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.util.JAXBSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
 
-import catalog.Catalog;
-import catalog.Catalog.Product;
-import catalog.Catalog.Product.Price;
+import org.xml.sax.SAXException;
+
+import catalog.ProductCatalog;
+import catalog.ProductCatalog.Product;
+import catalog.ProductCatalog.Product.Price;
 
 public class ViewController implements Initializable {
 
@@ -36,7 +44,7 @@ public class ViewController implements Initializable {
 	private TableView<Observable> tableView;
 	
 	@FXML
-	private TableColumn product,price, currency;
+	private TableColumn name,price,currency;
 	
 	@FXML
 	private TextField field1, field2, field3;
@@ -45,46 +53,39 @@ public class ViewController implements Initializable {
 	final ObservableList<Observable> data = FXCollections.observableArrayList();
 	
 	//trzymamy caly uklad xmla
-	private Catalog catalog;
+	private ProductCatalog catalog;
 	
 	private Observable selectedItem;
+	
+	private String sciezkaDostepu = "src\\catalog\\pliczek.xml";
+	private String schemaLocation = "src\\catalog\\baseSchema.xsd";
 	
 	@SuppressWarnings("unchecked")
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
 		
 		//Pobranie wartoœci z xmla i za³adowanie do listy
-		JAXBContext context = null;
-		try {
-			context = JAXBContext.newInstance("catalog");
-			Unmarshaller um = context.createUnmarshaller();
-			catalog = (Catalog) um.unmarshal(new FileReader("c:\\pliczek.xml"));
-			ArrayList<Product> list = (ArrayList<Product>) catalog.getProduct();
-			for(Product it : list)
-				data.add(new Observable(it));
-		} catch (FileNotFoundException | JAXBException e) {
-			e.printStackTrace();
-		}
+		load();
+		
 		tableView.setEditable(true);
-		product = new TableColumn("Product name");
-		product.setMinWidth(195);
+		name = new TableColumn("Product Name");
+		name.setMinWidth(195);
 		price = new TableColumn("Price");
 		price.setMinWidth(85);
 		currency = new TableColumn("Currency");
-		currency.setMinWidth(75);
+		currency.setMinWidth(64);
 		
-		
-		product.setCellValueFactory(
-                new PropertyValueFactory<Observable, String>("product"));
+		name.setCellValueFactory(
+                new PropertyValueFactory<Observable, String>("name"));
 		//Edycja tabeli z miejsca		
-		product.setCellFactory(TextFieldTableCell.forTableColumn());
-		product.setOnEditCommit(
+		name.setCellFactory(TextFieldTableCell.forTableColumn());
+		name.setOnEditCommit(
 		    new EventHandler<CellEditEvent<Observable, String>>() {
 		        @Override
 		        public void handle(CellEditEvent<Observable, String> t) {
 		            ((Observable) t.getTableView().getItems().get(
 		                t.getTablePosition().getRow())
-		                ).setTitle(t.getNewValue());
+		                ).setName(t.getNewValue());
 		        }
 		    }
 		);
@@ -100,11 +101,10 @@ public class ViewController implements Initializable {
 		        public void handle(CellEditEvent<Observable, String> t) {
 		            ((Observable) t.getTableView().getItems().get(
 		                t.getTablePosition().getRow())
-		                ).setPages(t.getNewValue());
+		                ).setPrice(t.getNewValue());
 		        }
 		    }
 		);
-
 
 		currency.setCellValueFactory( 
 				new PropertyValueFactory<Observable, String>("currency"));
@@ -117,15 +117,16 @@ public class ViewController implements Initializable {
 		        public void handle(CellEditEvent<Observable, String> t) {
 		            ((Observable) t.getTableView().getItems().get(
 		                t.getTablePosition().getRow())
-		                ).setPages(t.getNewValue());
+		                ).setCurrency(t.getNewValue());
 		        }
 		    }
 		);
 
+
 		
 		tableView.setItems(data);
 		tableView.getColumns().clear();
-		tableView.getColumns().addAll(product, price, currency);
+		tableView.getColumns().addAll(name, price, currency);
 		
 		tableView.getSelectionModel().selectedItemProperty().addListener(new ChangeListener() {
 			@Override
@@ -136,34 +137,75 @@ public class ViewController implements Initializable {
 		
 	}
 
-	public void addNew() {
-		Product Product = new Product();
-		Product.setName(field1.getText());
-		Product.setPrice(new Price());
-		Product.getPrice().setValue(field2.getText());
-		Product.getPrice().setCurrency(field3.getText());
-		catalog.getProduct().add(Product);
+	public void load() {
+		JAXBContext context = null;
+		try {
+			context = JAXBContext.newInstance("catalog");
+			
+			SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI); 
+		    Schema schema = null;
+			try {
+				schema = sf.newSchema(new File(schemaLocation));
+			} catch (SAXException e) {
+				System.out.println(e.toString());
+			} 
+		    
+			Unmarshaller um = context.createUnmarshaller();
+			um.setSchema(schema);
+			um.setEventHandler(new MyValidationHandler());
+			catalog = (ProductCatalog) um.unmarshal(new FileReader(sciezkaDostepu));
+			ArrayList<Product> list = (ArrayList<Product>) catalog.getProduct();
+			for(Product it : list)
+				data.add(new Observable(it));
+		} catch (FileNotFoundException | JAXBException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void save() {
 		writeToXML();
-		data.add(new Observable(Product));
+		data.clear();
+	}
+	
+	public void addNew() {
+		Product product = new Product();
+		product.setName(field1.getText());
+		product.setPrice(new Price());
+		product.getPrice().setValue(Byte.parseByte(field2.getText()));
+		product.getPrice().setCurrency(field3.getText());
+		catalog.getProduct().add(product);
+		data.add(new Observable(product));
 		field1.clear();
 		field2.clear();
+		field3.clear();
 	}
 	
 	public void removeSelected() {
 		catalog.getProduct().remove(selectedItem.getProduct());
 		data.remove(selectedItem);
-		writeToXML();
 	}
 	
 	public void writeToXML() {
+		
 		JAXBContext context = null;
-		try {
+		try {			
 			context = JAXBContext.newInstance("catalog");
-			Marshaller marshaller = context.createMarshaller();
-			marshaller.marshal(catalog, new File("c:\\pliczek.xml"));
+			
+			SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI); 
+	        Schema schema = null;
+			try {
+				schema = sf.newSchema(new File(schemaLocation));
+			} catch (SAXException e) {
+				System.out.println(e.toString());
+			} 
+	        Marshaller marshaller = context.createMarshaller();
+	        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+	        marshaller.setSchema(schema);
+	        marshaller.setEventHandler(new MyValidationHandler());
+		
+			marshaller.marshal(catalog, new File(sciezkaDostepu));
 		} catch (JAXBException c) {
 			System.out.println(c.toString());
 		}
 	}
-	
 }
